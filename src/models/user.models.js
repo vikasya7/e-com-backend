@@ -40,6 +40,9 @@ const userSchema = new Schema(
       state: String,
       pincode: String,
       country: String
+    },
+    refreshToken: {
+        type: String
     }
   },
   { timestamps: true }
