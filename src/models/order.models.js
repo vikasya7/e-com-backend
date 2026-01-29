@@ -65,6 +65,6 @@ const orderSchema=new Schema({
     paidAt: Date,
     deliveredAt: Date
 
-})
+},{timestamps:true})
 
 export const Order=mongoose.model("Order",orderSchema)
