@@ -63,7 +63,7 @@ const registerUser = asyncHandler(async (req, res) => {
             address,
         })
 
-        const createdUser = User.findById(user._id).select("-password -refreshToken")
+        const createdUser =await User.findById(user._id).select("-password -refreshToken")
         if (!createdUser) {
             throw new ApiError(400, "something went wrong while registering a user")
         }
@@ -90,7 +90,7 @@ const loginUser = asyncHandler(async (req,res)=>{
         throw new ApiError(400, "all fields are required")
     }
 
-    const user=await User.findOne(email);
+    const user=await User.findOne({email});
 
     if(!user){
         throw new ApiError(400,"Please sign up first")
@@ -123,6 +123,7 @@ const loginUser = asyncHandler(async (req,res)=>{
 
 const logoutUser =asyncHandler(async (req,res)=>{
     await User.findByIdAndUpdate(
+        req.user._id,
         {
             $set:{
                 refreshToken:undefined

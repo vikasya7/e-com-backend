@@ -40,4 +40,4 @@ const itemSchema = new Schema({
 },{timestamps:true})
 
 
-export const Item=mongoose.model("Product",itemSchema)
+export const Item=mongoose.model("Item",itemSchema)
