@@ -83,10 +83,71 @@ const registerUser = asyncHandler(async (req, res) => {
     }
 })
 
+const loginUser = asyncHandler(async (req,res)=>{
+    const {email, password}=req.body
+    
+    if([email,password].some((field)=>field.trim()==="")){
+        throw new ApiError(400, "all fields are required")
+    }
+
+    const user=await User.findOne(email);
+
+    if(!user){
+        throw new ApiError(400,"Please sign up first")
+    }
+    
+    const isPasswordValid=await user.isPasswordCorrect(password)
+    
+    if(!isPasswordValid){
+      throw new ApiError(401,"Invalid connection")
+   }
+
+   const {accessToken,refreshToken}=await generateAccessTokenAndRefreshToken(user._id)
+
+   const loggedInUser=await User.findById(user._id).select("-password -refreshToken")
+
+   if(!loggedInUser){
+    throw new ApiError(400,"not able to find user")
+   }
+
+   const options = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV==="production",
+   }
+
+   return res.status(200).cookie("accessToken",accessToken,options)
+   .cookie("refreshToken",refreshToken,options)
+   .json(new ApiResponse(200,loggedInUser,"user logged in successfully"))
+
+})
+
+const logoutUser =asyncHandler(async (req,res)=>{
+    await User.findByIdAndUpdate(
+        {
+            $set:{
+                refreshToken:undefined
+            }
+        },{new:true}
+    )
+
+    const options ={
+        httpOnly: true,
+        secure: process.env.NODE_ENV==="production",
+    }
+
+    return res.status(200)
+    .clearCookie("accessToken",options)
+    .clearCookie("refreshToken",options)
+    .json(new ApiResponse(200,{},"user logged out sccessfully"))
+
+})
+
 
 
 
 export {
     generateAccessTokenAndRefreshToken,
-    registerUser
+    registerUser,
+    loginUser,
+    logoutUser
 }
