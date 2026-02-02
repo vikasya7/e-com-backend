@@ -8,7 +8,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 const addToCart=asyncHandler(async(req ,res)=>{
     const {itemId,quantity=1}=req.body
 
-    if(itemId){
+    if(!itemId){
         throw new apiError(400,"itemId is required")
     }
 
@@ -19,16 +19,17 @@ const addToCart=asyncHandler(async(req ,res)=>{
         throw new apiError(400,"item not found")
     }
     
-    let cart=Cart.findById(req.user._id);
+    let cart=await Cart.findOne({owner: req.user._id});
 
     if(!cart){
         cart=await Cart.create({
-            user:req.user._id,
-            items:[]
+            owner:req.user._id,
+            items:[],
+            bill:0
         })
     }
 
-    const existingIndex=cart.items.findIndex(p=>p.itemId===itemId)
+    const existingIndex=cart.items.findIndex(p=>p.itemId.toString()===itemId)
 
     if(existingIndex>-1){
         // items are there in the cart
@@ -37,13 +38,17 @@ const addToCart=asyncHandler(async(req ,res)=>{
         cart.items[existingIndex]=existingItem
     }
     else{
-        cart.items.push({itemId,quantity})
+        cart.items.push({itemId,
+            name: item.name,      // good you kept this
+            quantity,
+            price: item.price})
     }
 
     // total price
-    cart.totalPrice=cart.items.reduce(
-        (acc,curr)=>acc+curr.price*curr.quantity,0
-    )
+     cart.bill = cart.items.reduce(
+        (acc, curr) => acc + curr.price * curr.quantity,
+        0
+    );
 
 
     await cart.save();
