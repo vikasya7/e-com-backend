@@ -1,5 +1,5 @@
 import { User } from "../models/user.models.js"
-import { ApiError } from "../utils/ApiError"
+import { ApiError } from "../utils/ApiError.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 import jwt from "jsonwebtoken"
 import { deleteFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js"
@@ -33,7 +33,7 @@ const registerUser = asyncHandler(async (req, res) => {
     if ([fullname, email, password, address].some((field) => field?.trim() === "")) {
         throw new ApiError(400, "all fields are required")
     }
-    const existedUser = await User.findOne(email)
+    const existedUser = await User.findOne({email})
     if (existedUser) {
         throw new ApiError(400, "user is already existed")
     }
