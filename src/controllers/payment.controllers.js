@@ -27,7 +27,7 @@ const createPaymentOrder=asyncHandler(async(req ,res)=>{
          throw new ApiError(400, "Already paid");
     }
     const options={
-        amount:order.totalPrice*100,
+        amount:Math.round(order.totalPrice * 100),
         currency:"INR",
         receipt:order._id.toString()
     }
