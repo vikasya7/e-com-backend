@@ -120,9 +120,10 @@ const getSingleOrder = asyncHandler(async(req,res)=>{
     )
 })
 
+
 const cancelOrder=asyncHandler(async(req,res)=>{
     const order=await Order.findOne({
-        _id:req.params._id,
+        _id:req.params.id,
         owner:req.user._id
     })
     
@@ -130,7 +131,7 @@ const cancelOrder=asyncHandler(async(req,res)=>{
         throw new ApiError(404, "Order not found");
     }
     if(order.orderStatus!=='placed'){
-        throw new ApiError(400,"order cannot be placed now")
+        throw new ApiError(400,"order cannot be cancelled now")
     }
     order.orderStatus='cancelled'
 
