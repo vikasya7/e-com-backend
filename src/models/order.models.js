@@ -1,28 +1,32 @@
 import mongoose, { Schema } from "mongoose";
 
-const orderSchema=new Schema({
-    owner:{
-        type:Schema.Types.ObjectId,
-        required:true,
-        ref:"User"
+const orderSchema = new Schema({
+    owner: {
+        type: Schema.Types.ObjectId,
+        required: true,
+        ref: "User"
     },
-    orderItems:[
+    orderItems: [
         {
+            itemId: {
+                type: Schema.Types.ObjectId,
+                ref: "Item"
+            },
             name: {
-                type:String,
-                required:true,
-                trim:true
+                type: String,
+                required: true,
+                trim: true
             },
-            image:{
-                type:String
+            image: {
+                type: String
             },
-            price:{
-                type:Number
+            price: {
+                type: Number
             },
-            quantity:{
-                type:Number,
-                default:1
-            }
+            quantity: {
+                type: Number,
+                default: 1
+            },
         }
     ],
 
@@ -41,7 +45,13 @@ const orderSchema=new Schema({
         }
     },
 
-
+     shippingAddress: {
+                address: String,
+                city: String,
+                postalCode: String,
+                country: String,
+                phone: String
+     },
 
     orderStatus: {
         type: String,
@@ -65,6 +75,11 @@ const orderSchema=new Schema({
     paidAt: Date,
     deliveredAt: Date
 
-},{timestamps:true})
+}, { timestamps: true })
 
-export const Order=mongoose.model("Order",orderSchema)
+
+
+orderSchema.index({ owner: 1 });
+orderSchema.index({ createdAt: -1 });
+
+export const Order = mongoose.model("Order", orderSchema)
