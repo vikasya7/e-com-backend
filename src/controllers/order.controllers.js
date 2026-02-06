@@ -71,7 +71,7 @@ const placeOrder=asyncHandler(async(req ,res)=>{
         },
         paymentInfo:{
             method:paymentMethod,
-            status:paymentMethod==='COD'? 'pending':'paid'
+            status:'pending'
         },
         itemsPrice,
         taxPrice,
@@ -89,7 +89,7 @@ const placeOrder=asyncHandler(async(req ,res)=>{
     // response
 
     return res.status(201).json(
-        new ApiResponse(201,"order placed successfully")
+        new ApiResponse(201,order,"order placed successfully")
     )
 })
 
