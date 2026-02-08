@@ -7,7 +7,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 
 const addToCart=asyncHandler(async(req ,res)=>{
     const {itemId,quantity=1}=req.body
-
+    console.log("BODY:", req.body);
     if(!itemId){
         throw new ApiError(400,"itemId is required")
     }
