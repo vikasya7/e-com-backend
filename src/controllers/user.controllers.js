@@ -186,7 +186,11 @@ const logoutUser =asyncHandler(async (req,res)=>{
 
 })
 
-
+const getUserDetails=asyncHandler(async(req,res)=>{
+    res.status(200).json(
+         new ApiResponse(200,req.user)
+    )
+})
 
 
 export {
@@ -194,5 +198,6 @@ export {
     registerUser,
     loginUser,
     logoutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    getUserDetails
 }
