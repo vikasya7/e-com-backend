@@ -5,59 +5,39 @@ import { Cart } from "../models/cart.models.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
 
-const addToCart=asyncHandler(async(req ,res)=>{
-    const {itemId,quantity=1}=req.body
-    console.log("BODY:", req.body);
+const addToCart=asyncHandler(async(req,res)=>{
+    const {itemId, quantity=1}=req.body
     if(!itemId){
-        throw new ApiError(400,"itemId is required")
+        throw new ApiError(400,"item id is required")
     }
 
-    // check item
-    const item = await Item.findById(itemId);
-
+    const item=await Item.findById(itemId)
     if(!item){
         throw new ApiError(400,"item not found")
     }
-    
-    let cart=await Cart.findOne({owner: req.user._id});
-
+    let cart=await Cart.findOne({owner:req.user._id})
     if(!cart){
-        cart=await Cart.create({
+       cart= await Cart.create({
             owner:req.user._id,
-            items:[],
-            bill:0
+            items:[{itemId,quantity}]
         })
     }
+    const existingItem=cart.items.find(p=>p.itemId.toString()===itemId)
 
-    const existingIndex=cart.items.findIndex(p=>p.itemId.toString()===itemId)
-
-    if(existingIndex>-1){
-        // items are there in the cart
-        let existingItem=cart.items[existingIndex];
+    if(existingItem){
         existingItem.quantity+=quantity;
-        cart.items[existingIndex]=existingItem
     }
     else{
-        cart.items.push({itemId,
-            name: item.name,      // good you kept this
-            quantity,
-            price: item.price})
+        cart.items.push({itemId,quantity})
     }
-
-    // total price
-     cart.bill = cart.items.reduce(
-        (acc, curr) => acc + curr.price * curr.quantity,
-        0
-    );
-
-
-    await cart.save();
+    await cart.save()
     
-     return res.status(200).json(
+    return res.status(200).json(
         new ApiResponse(200, cart, "Item added to cart successfully")
-    );
-})
+     );
 
+})
+    
 
 
 const removeFromCart=asyncHandler(async(req,res)=>{
@@ -73,38 +53,24 @@ const removeFromCart=asyncHandler(async(req,res)=>{
 
     // if cart is not there make a cart
     if(!cart){
-        cart=await Cart.create({
-            owner:req.user._id,
-            items:[],
-            bill:0
-        })
+        throw new ApiError(400,"cart not found")
     }
+    
+    const intialLength=cart.items.length;
 
-    // check if there are items in the cart
-    const existingIndex=cart.items.findIndex(p=>p.itemId.toString()===itemId)
-
-    if(existingIndex===-1){
-        throw new ApiError(400,"item not present in cart")
+    cart.items=cart.items.filter(
+        item=>item.itemId.toString()!==itemId
+    )
+    if(cart.items.length===intialLength){
+        throw new ApiError(404,"item not present in cart")
     }
-    const existingItem=cart.items[existingIndex]
-
-    if(existingItem.quantity<=quantity){
-        cart.items.splice(existingIndex,1)
-    }
-    else{
-        existingItem.quantity-=quantity
-    }
-
-    // cart total bill
-    cart.bill = cart.items.reduce(
-        (acc, curr) => acc + curr.price * curr.quantity,
-        0
-    );
 
     await cart.save()
 
-    return res.status(200).
-    json(new ApiResponse(200,"items removed from cart successfully"))
+     return res.status(200).json(
+       new ApiResponse(200, null, "Item removed successfully")
+     );
+    
 })
 
 const updateQuantity=asyncHandler(async(req,res)=>{
@@ -124,44 +90,57 @@ const updateQuantity=asyncHandler(async(req,res)=>{
         throw new ApiError(400, "cart not found");
     }
 
-    const existingIndex=cart.items.findIndex(p=>p.itemId.toString()===itemId)
-    if (existingIndex === -1) {
-        throw new ApiError(400, "item not present in cart");
-    }
-    if (quantity === 0) {
-        cart.items.splice(existingIndex, 1);
-    } else {
-        cart.items[existingIndex].quantity = quantity;
-    }
-    cart.bill=cart.items.reduce(
-        (acc,curr)=>acc+curr.price*curr.quantity,0
+    const item=cart.items.find(
+        i=>i.itemId.toString()===itemId
     )
+    
+    if(!item){
+        throw new ApiError(400,"item not in cart")
+    }
+    if(quantity<=0){
+        cart.items=cart.items.filter(
+            i=>i.itemId.toString()!==itemId
+        )
+    }
+    else{
+        item.quantity=quantity
+    }
 
-
-    await cart.save();
+    await cart.save()
 
     return res.status(200).json(
-        new ApiResponse(200, cart, "Quantity updated successfully")
-    );
-
+        new ApiResponse(200,cart,"quantity updated")
+    )
 })
 
 const getCart=asyncHandler(async(req,res)=>{
     const cart=await Cart.findOne({owner:req.user._id})
+    .populate("items.itemId","name price image stock")
 
-    if(!cart){
-        
+    if(!cart || cart.items.length==0){
         return res.status(200).json(
-             new ApiResponse(
+            new ApiResponse(
                 200,
-                { items: [], bill: 0 },
-                "Cart is empty"
+                {items:[],bill:0},
+                "cart is empty"
             )
         )
     }
+
+    const bill =cart.items.reduce((acc,curr)=>{
+        return acc+curr.itemId.price*curr.quantity
+    },0)
+
     return res.status(200).json(
-        new ApiResponse(200, cart, "Cart fetched successfully")
-    );
+        new ApiResponse(
+            200,
+            {
+                items:cart.items,
+                bill
+            },
+            "cart fetched successfully"
+        )
+    )
 })
 
 
