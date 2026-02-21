@@ -34,12 +34,30 @@ const userSchema = new Schema(
       default: "user"
     },
 
-    address: {
-      street: String,
-      city: String,
-      state: String,
-      pincode: String,
-      country: String
+     addresses: [
+      {
+        _id: {
+          type: mongoose.Schema.Types.ObjectId,
+          auto: true
+        },
+        fullName: { type: String, required: true },
+        phone: { type: String, required: true },
+        street: { type: String, required: true },
+        city: { type: String, required: true },
+        state: { type: String, required: true },
+        pincode: { type: String, required: true },
+        country: { type: String, default: "India" },
+        landmark: String,
+        isDefault: { type: Boolean, default: false }
+      }
+    ],
+    provider:{
+      type:String,
+      enum:["local","google"],
+      default:"local"
+    },
+    googleId:{
+       type:String
     },
     refreshToken: {
         type: String

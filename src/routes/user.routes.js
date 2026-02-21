@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { upload } from "../middlewares/multer.middleware.js";
-import {getUserDetails, loginUser, logoutUser, refreshAccessToken, registerUser} from "../controllers/user.controllers.js"
+import {getUserDetails, googleLogin, loginUser, logoutUser, refreshAccessToken, registerUser} from "../controllers/user.controllers.js"
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyAdmin } from "../middlewares/admin.middleware.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -20,7 +20,7 @@ router.route("/register").post(
 router.route("/login").post(loginUser)
 router.route("/refresh-token").post(refreshAccessToken)
 router.route("/me").get(verifyJWT,getUserDetails)
-router.route("/logout").post(verifyJWT,logoutUser)
+router.route("/logout").post(logoutUser)
 router.route("/:id/make-admin").patch(verifyJWT,verifyAdmin,
     asyncHandler(async(req,res)=>{
         const user=await User.findByIdAndUpdate(
@@ -31,5 +31,5 @@ router.route("/:id/make-admin").patch(verifyJWT,verifyAdmin,
         res.json(user)
     })
 )
-
+router.route("/google-login").post(googleLogin)
 export default router

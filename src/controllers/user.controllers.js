@@ -4,7 +4,10 @@ import { asyncHandler } from "../utils/asyncHandler.js"
 import jwt from "jsonwebtoken"
 import { deleteFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { OAuth2Client } from "google-auth-library"
 
+
+const client=new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 const generateAccessTokenAndRefreshToken = async (userId) => {
     try {
         const user = await User.findById(userId)
@@ -24,6 +27,49 @@ const generateAccessTokenAndRefreshToken = async (userId) => {
         throw new ApiError(500, "something went wrong while generating access and refresh token")
     }
 }
+
+
+const googleLogin = asyncHandler(async(req,res)=>{
+    const {token}=req.body
+    const ticket = await client.verifyIdToken({
+        idToken:token,
+        audience:process.env.GOOGLE_CLIENT_ID
+    })
+
+    const payload=ticket.getPayload()
+
+    const {email,name,picture,sub}=payload
+
+    let user = await User.findOne({email});
+
+    if(!user){
+        user =await User.create({
+            fullname:name,
+            email,
+            avatar:picture,
+            provider:"google",
+            googleId:sub,
+            password:"GOOGLE_AUTH"
+        })
+    }
+
+    // generating my own jwt
+
+    const {accessToken,refreshToken}=await generateAccessTokenAndRefreshToken(user._id)
+    user.refreshToken=refreshToken
+    await user.save({ validateBeforeSave: false });
+
+    const options={
+        httpOnly:true,
+        secure:process.env.NODE_ENV === "production",
+    }
+
+    return res.status(200).
+    cookie("accessToken",accessToken,options)
+    .cookie("refreshToken",refreshToken,options)
+    .json(new ApiResponse(200, user, "Google login successful"))
+})
+
 
 const registerUser = asyncHandler(async (req, res) => {
     const { fullname, email, password, address } = req.body;
@@ -165,14 +211,6 @@ const refreshAccessToken=asyncHandler(async(req,res)=>{
 
 
 const logoutUser =asyncHandler(async (req,res)=>{
-    await User.findByIdAndUpdate(
-        req.user._id,
-        {
-            $set:{
-                refreshToken:undefined
-            }
-        },{new:true}
-    )
 
     const options ={
         httpOnly: true,
@@ -199,5 +237,6 @@ export {
     loginUser,
     logoutUser,
     refreshAccessToken,
-    getUserDetails
+    getUserDetails,
+    googleLogin
 }

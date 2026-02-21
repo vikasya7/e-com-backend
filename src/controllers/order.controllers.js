@@ -7,91 +7,104 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 
 
-const placeOrder=asyncHandler(async(req ,res)=>{
-    const{address,
-        city,
-        postalCode,
-        country,
-        phone,paymentMethod="COD"
-    }=req.body
+const placeOrder = asyncHandler(async (req, res) => {
 
-    const cart=await Cart.findOne({owner:req.user._id})
+  const {
+    address,
+    city,
+    postalCode,
+    country,
+    phone,
+    paymentMethod = "COD"
+  } = req.body;
 
-    if(!cart || cart.items.length===0){
-        throw new ApiError(400,"cart not found")
+  const cart = await Cart.findOne({ owner: req.user._id });
+
+  if (!cart || cart.items.length === 0) {
+    throw new ApiError(400, "Cart is empty");
+  }
+
+  let itemsPrice = 0;
+  const orderItems = [];
+
+  for (const cartItem of cart.items) {
+    const product = await Item.findById(cartItem.itemId);
+
+    if (!product) {
+      throw new ApiError(400, "Product not found");
     }
 
+    const variant = product.variants.find(
+      v => v.weight === cartItem.weight
+    );
 
-    // stock validation and prepare items
-
-    let itemsPrice=0
-    const orderItems=[]
-    for(const cartItem of cart.items){
-        const item=await Item.findById(cartItem.itemId)
-        if(!item){
-            throw new ApiError(400,"item not found")
-        }
-
-        if(item.stock<cartItem.quantity){
-            throw new ApiError(400,`${item.name} is out of stock`)
-        }
-
-        // reduce stock
-        item.stock-=cartItem.quantity
-        await item.save();
-
-        orderItems.push({
-            itemId:item._id,
-            name:item.name,
-            image:item.image,
-            price: item.price,
-            quantity: cartItem.quantity
-        })
-
-
-        itemsPrice += item.price * cartItem.quantity;
+    if (!variant || variant.stock < cartItem.quantity) {
+      throw new ApiError(400, "Stock unavailable");
     }
 
-    // pricing
-    const taxPrice=itemsPrice*0.18   //gst
-    const shippingPrice=itemsPrice>500 ? 0:50
-    const totalPrice=itemsPrice+taxPrice+shippingPrice
-
-
-    // now we will create order
-    const order=await Order.create({
-        owner:req.user._id,
-        orderItems,
-        shippingAddress:{
-            address,
-            city,
-            postalCode,
-            country,
-            phone
-        },
-        paymentInfo:{
-            method:paymentMethod,
-            status:'pending'
-        },
-        itemsPrice,
-        taxPrice,
-        shippingPrice,
-        totalPrice
+    orderItems.push({
+      itemId: product._id,
+      name: product.name,
+      weight: cartItem.weight,
+      image: product.images?.[0]?.url,
+      price: cartItem.price,
+      quantity: cartItem.quantity
     });
 
+    itemsPrice += cartItem.price * cartItem.quantity;
+  }
 
-    // clear cart
-    cart.items=[];
-    cart.bill=0
-    await cart.save();
+  const taxPrice = itemsPrice * 0.18;
+  const shippingPrice = itemsPrice > 500 ? 0 : 50;
+  const totalPrice = itemsPrice + taxPrice + shippingPrice;
 
+  const order = await Order.create({
+    owner: req.user._id,
+    orderItems,
+    shippingAddress: {
+      address,
+      city,
+      postalCode,
+      country,
+      phone
+    },
+    paymentInfo: {
+      method: paymentMethod,
+      status: paymentMethod === "COD" ? "paid" : "pending"
+    },
+    orderStatus: paymentMethod === "COD" ? "placed" : "pending",
+    itemsPrice,
+    taxPrice,
+    shippingPrice,
+    totalPrice
+  });
 
-    // response
+  // ✅ If COD → reduce stock immediately
+  if (paymentMethod === "COD") {
+    for (const item of order.orderItems) {
+      await Item.updateOne(
+        {
+          _id: item.itemId,
+          "variants.weight": item.weight,
+          "variants.stock": { $gte: item.quantity }
+        },
+        {
+          $inc: { "variants.$.stock": -item.quantity }
+        }
+      );
+    }
 
-    return res.status(201).json(
-        new ApiResponse(201,order,"order placed successfully")
-    )
-})
+    await Cart.findOneAndUpdate(
+      { owner: req.user._id },
+      { items: [] }
+    );
+  }
+
+  return res.status(201).json(
+    new ApiResponse(201, order, "Order created")
+  );
+});
+
 
 
 // get my orders
@@ -121,33 +134,47 @@ const getSingleOrder = asyncHandler(async(req,res)=>{
 })
 
 
-const cancelOrder=asyncHandler(async(req,res)=>{
-    const order=await Order.findOne({
-        _id:req.params.id,
-        owner:req.user._id
-    })
-    
-    if (!order) {
-        throw new ApiError(404, "Order not found");
-    }
-    if(order.orderStatus!=='placed'){
-        throw new ApiError(400,"order cannot be cancelled now")
-    }
-    order.orderStatus='cancelled'
+const cancelOrder = asyncHandler(async (req, res) => {
 
-    // restore stock
-    for(const item of order.orderItems){
-        await Item.findByIdAndUpdate(item.itemId,{
-                $inc: { stock: item.quantity }
-        })
-    }
+  const order = await Order.findOne({
+    _id: req.params.id,
+    owner: req.user._id
+  });
 
-     await order.save();
+  if (!order) {
+    throw new ApiError(404, "Order not found");
+  }
 
-    return res.status(200).json(
-        new ApiResponse(200, order, "Order cancelled")
+  if (order.orderStatus !== "placed") {
+    throw new ApiError(400, "Order cannot be cancelled now");
+  }
+
+  // 🔥 Restore variant stock
+  for (const item of order.orderItems) {
+
+    const product = await Item.findById(item.itemId);
+
+    if (!product) continue;
+
+    const variant = product.variants.find(
+      v => v.weight === item.weight
     );
-})
+
+    if (variant) {
+      variant.stock += item.quantity;
+      await product.save();
+    }
+  }
+
+  order.orderStatus = "cancelled";
+  await order.save();
+
+  return res.status(200).json(
+    new ApiResponse(200, order, "Order cancelled successfully")
+  );
+
+});
+
 
 
 export  {
