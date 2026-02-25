@@ -37,4 +37,12 @@ app.use("/api/v1/categories",categoryRouter)
 app.use("/api/v1/admin",adminRouter)
 app.use("/api/v1/users",addressRouter)
 app.use("/api/v1/coupons",couponRouter)
+
+
+app.get("/", (req, res) => {
+  res.status(200).json({
+    status: "success",
+    message: "Squirll Bites API is running 🚀",
+  });
+});
 export {app}
