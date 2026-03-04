@@ -5,7 +5,8 @@ const orderSchema = new Schema({
   owner: {
     type: Schema.Types.ObjectId,
     required: true,
-    ref: "User"
+    ref: "User",
+    //index:true
   },
 
   orderItems: [
@@ -66,6 +67,13 @@ const orderSchema = new Schema({
     country: String,
     phone: String
   },
+  shipmentInfo: {
+    shipmentId: String,
+    awbCode: String,
+    courier: String,
+    trackingUrl: String,
+    shippedAt: Date
+  },
 
   orderStatus: {
     type: String,
@@ -77,8 +85,12 @@ const orderSchema = new Schema({
       "delivered",
       "cancelled"
     ],
-    default: "placed"
+    default: "placed",
+    //index:true
   },
+   
+  cancelReason: String,
+  cancelledAt: Date,
 
   itemsPrice: { type: Number, required: true },
   taxPrice: { type: Number, required: true },
@@ -92,6 +104,8 @@ const orderSchema = new Schema({
 
 orderSchema.index({ owner: 1 });
 orderSchema.index({ createdAt: -1 });
+orderSchema.index({ orderStatus: 1 });
+orderSchema.index({ "paymentInfo.razorpayOrderId": 1 });
 
 
 export const Order = mongoose.model("Order", orderSchema)

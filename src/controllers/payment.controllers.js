@@ -6,6 +6,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Item } from "../models/item.models.js";
 import mongoose from "mongoose";
+import { Cart } from "../models/cart.models.js";
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_SECRET,
@@ -23,13 +24,13 @@ const createPaymentOrder = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Already paid");
   }
   const options = {
-    amount: Math.round(order.totalPrice * 100),
+    amount: Math.floor(order.totalPrice * 100),
     currency: "INR",
     receipt: order._id.toString(),
   };
 
   const razorpayOrder = await razorpay.orders.create(options);
-  order.paymentInfo.razorpayOrderId = razorpayOrder._id;
+  order.paymentInfo.razorpayOrderId = razorpayOrder.id;
   await order.save();
   return res.status(200).json(new ApiResponse(200, razorpayOrder));
 });

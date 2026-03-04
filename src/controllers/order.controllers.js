@@ -1,11 +1,16 @@
+import mongoose from "mongoose";
 import { Cart } from "../models/cart.models.js";
 import { Item } from "../models/item.models.js";
 import { Order } from "../models/order.models.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import Razorpay from "razorpay";
 
-
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_SECRET,
+});
 
 const placeOrder = asyncHandler(async (req, res) => {
 
@@ -70,9 +75,9 @@ const placeOrder = asyncHandler(async (req, res) => {
     },
     paymentInfo: {
       method: paymentMethod,
-      status: paymentMethod === "COD" ? "paid" : "pending"
+      status: paymentMethod === "COD" ? "pending" : "pending"
     },
-    orderStatus: paymentMethod === "COD" ? "placed" : "pending",
+    orderStatus: "placed",
     itemsPrice,
     taxPrice,
     shippingPrice,
@@ -81,23 +86,36 @@ const placeOrder = asyncHandler(async (req, res) => {
 
   // ✅ If COD → reduce stock immediately
   if (paymentMethod === "COD") {
-    for (const item of order.orderItems) {
-      await Item.updateOne(
-        {
-          _id: item.itemId,
-          "variants.weight": item.weight,
-          "variants.stock": { $gte: item.quantity }
-        },
-        {
-          $inc: { "variants.$.stock": -item.quantity }
-        }
-      );
-    }
+    const session=await mongoose.startSession()
+    session.startTransaction()
 
-    await Cart.findOneAndUpdate(
+    try {
+      for(const item of orderItems){
+        const result=await Item.updateOne({
+          _id:item.itemId,
+          "variants.weight":item.weight,
+          "variants.stock":{$gte:item.quantity}
+        },
+      {
+        $inc:{"variants.$.stock":-item.quantity}
+      },{session})
+      if(result.modifiedCount===0){
+         throw new ApiError(400, "Stock unavailable");
+      }
+       await Cart.findOneAndUpdate(
       { owner: req.user._id },
-      { items: [] }
+      { items: [] },
+      { session }
     );
+
+    await session.commitTransaction();
+    session.endSession();
+      }
+    } catch (error) {
+      await session.abortTransaction();
+    session.endSession();
+    throw error;
+    }
   }
 
   return res.status(201).json(
@@ -136,38 +154,94 @@ const getSingleOrder = asyncHandler(async(req,res)=>{
 
 const cancelOrder = asyncHandler(async (req, res) => {
 
-  const order = await Order.findOne({
-    _id: req.params.id,
-    owner: req.user._id
-  });
+  const session = await mongoose.startSession();
+  let order;
 
-  if (!order) {
-    throw new ApiError(404, "Order not found");
+  try {
+
+    session.startTransaction();
+
+    order = await Order.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    }).session(session);
+
+    if (!order) {
+      throw new ApiError(404, "Order not found");
+    }
+
+    // Idempotency
+    if (order.orderStatus === "cancelled") {
+      await session.commitTransaction();
+      session.endSession();
+
+      return res.status(200).json(
+        new ApiResponse(200, order, "Order already cancelled")
+      );
+    }
+
+    // Cancel allowed till shipped
+    if (!["placed", "confirmed", "packed"].includes(order.orderStatus)) {
+      throw new ApiError(400, "Order cannot be cancelled now");
+    }
+
+    // Restore stock
+    for (const item of order.orderItems) {
+      await Item.updateOne(
+        {
+          _id: item.itemId,
+          "variants.weight": item.weight
+        },
+        {
+          $inc: { "variants.$.stock": item.quantity }
+        },
+        { session }
+      );
+    }
+
+    order.orderStatus = "cancelled";
+    order.cancelledAt = new Date();
+
+    await order.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+  } catch (error) {
+
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+
+    session.endSession();
+    throw error;
   }
 
-  if (order.orderStatus !== "placed") {
-    throw new ApiError(400, "Order cannot be cancelled now");
-  }
+  // 🔹 Refund OUTSIDE transaction
+  if (
+    order.paymentInfo.method === "RAZORPAY" &&
+    order.paymentInfo.status === "paid"
+  ) {
 
-  // 🔥 Restore variant stock
-  for (const item of order.orderItems) {
+    try {
 
-    const product = await Item.findById(item.itemId);
+      const refund = await razorpay.payments.refund(
+        order.paymentInfo.razorpayPaymentId,
+        { amount: order.totalPrice * 100 }
+      );
 
-    if (!product) continue;
+      order.paymentInfo.status = "refunded";
+      order.paymentInfo.refundId = refund.id;
+      order.paymentInfo.refundedAt = new Date();
 
-    const variant = product.variants.find(
-      v => v.weight === item.weight
-    );
+      await order.save();
 
-    if (variant) {
-      variant.stock += item.quantity;
-      await product.save();
+    } catch (err) {
+
+      console.error("Refund failed:", err);
+
     }
   }
-
-  order.orderStatus = "cancelled";
-  await order.save();
 
   return res.status(200).json(
     new ApiResponse(200, order, "Order cancelled successfully")
