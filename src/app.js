@@ -27,6 +27,7 @@ import categoryRouter from './routes/category.routes.js'
 import adminRouter from './routes/admin.routes.js'
 import addressRouter from './routes/address.routes.js'
 import couponRouter from './routes/coupon.routes.js'
+import otpRouter from './routes/otp.routes.js'
 
 app.use("/api/v1/users",userRouter)
 app.use("/api/v1/users",cartRouter)
@@ -37,6 +38,7 @@ app.use("/api/v1/categories",categoryRouter)
 app.use("/api/v1/admin",adminRouter)
 app.use("/api/v1/users",addressRouter)
 app.use("/api/v1/coupons",couponRouter)
+app.use("/api/v1/otp",otpRouter)
 
 
 app.get("/", (req, res) => {

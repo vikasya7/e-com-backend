@@ -77,7 +77,45 @@ const getAdminStats=asyncHandler(async(req,res)=>{
 
 });
 
+const confirmOrder=asyncHandler(async(req,res)=>{
+    const order=await Order.findById(req.params.id)
+
+    if(!order){
+        throw new ApiError(400,"Order not found")
+    }
+
+    if(order.orderStatus!=="placed"){
+        throw new ApiError(400,"Order cannot be confirmed")
+    }
+
+    order.orderStatus="confirmed"
+
+    await order.save();
+
+    res.status(200).json(
+        new ApiResponse(200,"Order confirmed")
+    )
+})
+
+const getAllOrders = asyncHandler(async (req, res) => {
+
+  const orders = await Order.find()
+    .populate("owner", "fullname email")
+    .sort({ createdAt: -1 });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      orders,
+      "Orders fetched successfully"
+    )
+  );
+
+});
+
 
 export {getAdminStats,
-    promoteByEmail
+    promoteByEmail,
+    confirmOrder,
+    getAllOrders
 }

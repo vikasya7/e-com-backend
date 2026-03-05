@@ -42,6 +42,10 @@ const userSchema = new Schema(
         },
         fullName: { type: String, required: true },
         phone: { type: String, required: true },
+        isPhoneVerified: {
+          type:Boolean,
+          default:false,
+        },
         street: { type: String, required: true },
         city: { type: String, required: true },
         state: { type: String, required: true },
