@@ -6,6 +6,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import Razorpay from "razorpay";
+import { User } from "../models/user.models.js";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -13,15 +14,18 @@ const razorpay = new Razorpay({
 });
 
 const placeOrder = asyncHandler(async (req, res) => {
+   console.log("BODY:", req.body);
+  const { addressId, paymentMethod = "COD" } = req.body;
+  
 
-  const {
-    address,
-    city,
-    postalCode,
-    country,
-    phone,
-    paymentMethod = "COD"
-  } = req.body;
+  // ---------------- GET USER ADDRESS ----------------
+  const user = await User.findById(req.user._id);
+
+  const selectedAddress = user.addresses.id(addressId);
+
+  if (!selectedAddress) {
+    throw new ApiError(400, "Address not found");
+  }
 
   const cart = await Cart.findOne({ owner: req.user._id });
 
@@ -66,16 +70,17 @@ const placeOrder = asyncHandler(async (req, res) => {
   const order = await Order.create({
     owner: req.user._id,
     orderItems,
-    shippingAddress: {
-      address,
-      city,
-      postalCode,
-      country,
-      phone
+     shippingAddress: {
+      address: selectedAddress.street,
+      city: selectedAddress.city,
+      postalCode: selectedAddress.pincode,
+      country: selectedAddress.country || "India",
+      phone: selectedAddress.phone
     },
+
     paymentInfo: {
       method: paymentMethod,
-      status: paymentMethod === "COD" ? "pending" : "pending"
+      status: "pending"
     },
     orderStatus: "placed",
     itemsPrice,
